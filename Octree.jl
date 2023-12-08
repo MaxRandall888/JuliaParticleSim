@@ -32,8 +32,12 @@ end
 
 function find_child_index(node::OctreeNode, position::Vector{Float64})
     # Determine the index of the child node based on the position
-    # (This function should return an integer between 1 and 8, representing the octant)
-    # TODO: Implement the logic to calculate the correct child index
+    x_index = position[1] > node.region_center[1] ? 1 : 0
+    y_index = position[2] > node.region_center[2] ? 1 : 0
+    z_index = position[3] > node.region_center[3] ? 1 : 0
+
+    # Combine the indices to get the octant number (1-8)
+    return 1 + x_index + 2*y_index + 4*z_index
 end
 
 function update_mass_properties!(node::OctreeNode, particle::Particle)
@@ -44,4 +48,8 @@ end
 function subdivide_node!(node::OctreeNode)
     # Create eight children for the node, each representing an octant
     # TODO: Implement the logic to create and initialize child nodes
+    x_lim = node.region_center[1] + node.region_size / 2
+    y_lim = node.region_center[2] + node.region_size / 2
+    z_lim = node.region_center[3] + node.region_size / 2
+    
 end
