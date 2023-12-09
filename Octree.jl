@@ -13,6 +13,11 @@ struct Octree
     root::OctreeNode
 end
 
+function create_octree(region_center::Vector{Float64}, region_size::Float64)
+    # TODO: Create and return a new Octree with a root node
+    
+end
+
 function insert_particle!(node::OctreeNode, particle::Particle)
     # If the node is a leaf (no children), insert the particle here
     if isempty(node.children)
@@ -41,15 +46,58 @@ function find_child_index(node::OctreeNode, position::Vector{Float64})
 end
 
 function update_mass_properties!(node::OctreeNode, particle::Particle)
-    # Update the node's total mass and center of mass based on the new particle
-    # TODO: Implement the logic to update mass properties
+    # Update the total mass
+    new_total_mass = node.total_mass + particle.mass
+    if node.total_mass == 0
+        # If the node had no mass, the new center of mass is the particle's position
+        node.center_of_mass = particle.position
+    else
+        # Update the center of mass
+        node.center_of_mass = (node.center_of_mass .* node.total_mass .+ particle.position .* particle.mass) ./ new_total_mass
+    end
+    node.total_mass = new_total_mass
 end
 
 function subdivide_node!(node::OctreeNode)
-    # Create eight children for the node, each representing an octant
-    # TODO: Implement the logic to create and initialize child nodes
-    x_lim = node.region_center[1] + node.region_size / 2
-    y_lim = node.region_center[2] + node.region_size / 2
-    z_lim = node.region_center[3] + node.region_size / 2
-    
+    # Calculate the limits for subdivision
+    half_size = node.region_size / 2
+    quarter_size = node.region_size / 4
+
+    new_centers = [
+        node.region_center + [-quarter_size, -quarter_size, -quarter_size],
+        node.region_center + [quarter_size, -quarter_size, -quarter_size],
+        node.region_center + [-quarter_size, quarter_size, -quarter_size],
+        node.region_center + [quarter_size, quarter_size, -quarter_size],
+        node.region_center + [-quarter_size, -quarter_size, quarter_size],
+        node.region_center + [quarter_size, -quarter_size, quarter_size],
+        node.region_center + [-quarter_size, quarter_size, quarter_size],
+        node.region_center + [quarter_size, quarter_size, quarter_size]
+    ]
+
+    # Initialize children with new centers and half the size
+    node.children = [OctreeNode(center, half_size, zeros(3), 0.0, Particle[], OctreeNode[]) for center in new_centers]
+end
+
+function traverse_octree(node::OctreeNode)
+    # TODO: Implement a function to traverse the tree (e.g., for calculations or debugging)
+end
+
+function update_octree!(tree::Octree)
+    # TODO: Implement logic to check if particles have moved out of their node's region
+    # and need to be reinserted
+
+    # Recursively update mass properties starting from the root
+    update_mass_properties!(tree.root)
+end
+
+
+function remove_particle!(node::OctreeNode, particle::Particle)
+    if isempty(node.children)
+        filter!(p -> p != particle, node.particles)
+    else
+        idx = find_child_index(node, particle.position)
+        remove_particle!(node.children[idx], particle)
+    end
+    #! Note: We're not calling update_mass_properties! be sure
+    #!       to call it any time you call remove_particle!
 end
