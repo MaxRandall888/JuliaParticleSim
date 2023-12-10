@@ -7,6 +7,7 @@ mutable struct OctreeNode
     total_mass::Float64
     particles::Vector{Particle}  # Particles in this node
     children::Vector{Union{OctreeNode, Nothing}}  # Child nodes
+    parent::Union{OctreeNode, Nothing}  # Parent node
 end
 
 struct Octree
@@ -14,7 +15,7 @@ struct Octree
 end
 
 function create_octree_root(region_center::Vector{Float64}, region_size::Float64)
-    root = OctreeNode(region_center, region_size, region_center, 0.0, Particle[], OctreeNode[])
+    root = OctreeNode(region_center, region_size, region_center, 0.0, Particle[], OctreeNode[], nothing)
     return Octree(root)
 end
 
@@ -62,6 +63,7 @@ function find_child_index(node::OctreeNode, position::Vector{Float64})
     return 1 + x_index + 2*y_index + 4*z_index
 end
 
+#* For inserting nodes
 function update_mass_properties!(node::OctreeNode, particle::Particle)
     # Update the total mass
     new_total_mass = node.total_mass + particle.mass
@@ -73,6 +75,16 @@ function update_mass_properties!(node::OctreeNode, particle::Particle)
         node.center_of_mass = (node.center_of_mass .* node.total_mass .+ particle.position .* particle.mass) ./ new_total_mass
     end
     node.total_mass = new_total_mass
+end
+
+#* For removing nodes
+function recalculate_mass_properties!(node::OctreeNode)
+    # Reset mass properties
+    node.total_mass = 0.0
+    node.center_of_mass = zeros(3)
+    for particle in node.particles
+        update_mass_properties!(node, particle)
+    end
 end
 
 function subdivide_node!(node::OctreeNode)
@@ -92,7 +104,7 @@ function subdivide_node!(node::OctreeNode)
     ]
 
     # Initialize children with new centers and half the size
-    node.children = [OctreeNode(center, half_size, zeros(3), 0.0, Particle[], OctreeNode[]) for center in new_centers]
+    node.children = [OctreeNode(center, half_size, zeros(3), 0.0, Particle[], OctreeNode[], node) for center in new_centers]
 end
 
 function traverse_octree(node::OctreeNode)
@@ -108,13 +120,24 @@ function update_octree!(tree::Octree)
 end
 
 
-function remove_particle!(node::OctreeNode, particle::Particle)
+function remove_particle!(node::OctreeNode, particle::Particle, tree::Octree)
     if isempty(node.children)
+        # Remove the particle if this is a leaf node
         filter!(p -> p != particle, node.particles)
+        # Update mass properties after removal, if the node is not empty
+        if !isempty(node.particles)
+            recalculate_mass_properties!(node)
+        else
+            node.total_mass = 0.0
+            node.center_of_mass = zeros(3)
+        end
     else
+        # Find the child node containing the particle and remove recursively
         idx = find_child_index(node, particle.position)
-        remove_particle!(node.children[idx], particle)
+        remove_particle!(node.children[idx], particle, tree)
     end
+    # Update the mass properties of the parent nodes up to the root
+    update_mass_properties_upwards!(node, tree.root)
 end
 
 function collect_all_particles(node::OctreeNode)
@@ -129,4 +152,17 @@ function collect_all_particles(node::OctreeNode)
         end
     end
     return particles
+end
+
+function update_mass_properties_upwards!(current_node::OctreeNode, root_node::OctreeNode)
+    while current_node != root_node
+        # Recalculate the mass properties for the parent node
+        parent_node = find_parent_node(current_node, root_node)
+        update_mass_properties!(parent_node)
+        current_node = parent_node
+    end
+end
+
+function get_parent(node::OctreeNode)
+    return node.parent
 end
