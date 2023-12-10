@@ -13,26 +13,43 @@ struct Octree
     root::OctreeNode
 end
 
-function create_octree(region_center::Vector{Float64}, region_size::Float64)
-    # TODO: Create and return a new Octree with a root node
-    
+function create_octree_root(region_center::Vector{Float64}, region_size::Float64)
+    root = OctreeNode(region_center, region_size, region_center, 0.0, Particle[], OctreeNode[])
+    return Octree(root)
 end
+
 
 function insert_particle!(node::OctreeNode, particle::Particle)
     # If the node is a leaf (no children), insert the particle here
     if isempty(node.children)
         push!(node.particles, particle)
-        # Subdivide the node if there's more than one particle
+        
+        # Update the center of mass and total mass before potentially subdividing
+        update_mass_properties!(node, particle)
+
+        # Subdivide the node if there's more than one particle and reinsert them
         if length(node.particles) > 1
             subdivide_node!(node)
+            # Reinsert particles into the appropriate children
+            for p in node.particles
+                idx = find_child_index(node, p.position)
+                insert_particle!(node.children[idx], p)
+            end
+            # Clear the particles list in the current node as they are now in the children
+            node.particles = Particle[]
         end
     else
-        # Find the correct child node for the particle and insert recursively
+        # If the node has children, find the correct child node for the particle and insert recursively
         idx = find_child_index(node, particle.position)
         insert_particle!(node.children[idx], particle)
     end
-    # Update the center of mass and total mass
-    update_mass_properties!(node, particle)
+end
+
+function reset_node!(node::OctreeNode)
+    node.particles = Particle[]
+    node.children = OctreeNode[]
+    node.total_mass = 0.0
+    node.center_of_mass = zeros(3)
 end
 
 function find_child_index(node::OctreeNode, position::Vector{Float64})
@@ -98,6 +115,18 @@ function remove_particle!(node::OctreeNode, particle::Particle)
         idx = find_child_index(node, particle.position)
         remove_particle!(node.children[idx], particle)
     end
-    #! Note: We're not calling update_mass_properties! be sure
-    #!       to call it any time you call remove_particle!
+end
+
+function collect_all_particles(node::OctreeNode)
+    particles = Particle[]
+    if isempty(node.children)
+        append!(particles, node.particles)
+    else
+        for child in node.children
+            if child !== nothing
+                append!(particles, collect_all_particles(child)...)
+            end
+        end
+    end
+    return particles
 end
